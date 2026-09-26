@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# `harness-hacka` no PATH do Bash do Claude Code. O plugin põe a pasta bin/ no PATH da sessão.
+# `python` primeiro: no Windows, `python3` pode ser o atalho da Microsoft Store, que não roda.
+dir=$(cd "$(dirname "$0")" && pwd)
+if command -v python >/dev/null 2>&1; then py=python; else py=python3; fi
+exec "$py" "$dir/harness-hacka.py" "$@"

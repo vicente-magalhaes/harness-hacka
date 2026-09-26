@@ -1,0 +1,65 @@
+{
+  "$comment": "Todo hook é inerte num projeto sem .claude/harness-hacka.json: o gate está no código (config.load), não aqui. `python` primeiro porque no Windows `python3` pode ser o atalho da Microsoft Store; `python3` em seguida porque no macOS e em Linux sem python-is-python3 o nome `python` não existe.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if command -v python >/dev/null 2>&1; then p=python; else p=python3; fi; exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py\" hook session-start",
+            "timeout": 20,
+            "statusMessage": "harness-hacka: carregando a memória do projeto"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if command -v python >/dev/null 2>&1; then p=python; else p=python3; fi; exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py\" hook subagent-start",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if command -v python >/dev/null 2>&1; then p=python; else p=python3; fi; exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py\" hook approval",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read|Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if command -v python >/dev/null 2>&1; then p=python; else p=python3; fi; exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py\" hook guard",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if command -v python >/dev/null 2>&1; then p=python; else p=python3; fi; exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py\" hook triggers",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

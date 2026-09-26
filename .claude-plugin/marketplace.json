@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "harness-hacka",
+  "owner": { "name": "Vicente Magalhães" },
+  "description": "harness-hacka: memória de projeto para agentes de código.",
+  "plugins": [
+    {
+      "name": "harness-hacka",
+      "source": "./",
+      "description": "Notas, decisões e diário no repositório. Housekeeping com subagente, decisão humana garantida por hook.",
+      "category": "workflow",
+      "tags": ["memory", "decisions", "journal", "housekeeping", "governance"]
+    }
+  ]
+}

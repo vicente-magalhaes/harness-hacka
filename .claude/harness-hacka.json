@@ -1,0 +1,9 @@
+{
+  "$comment": "O harness-hacka cuidando da memória do próprio harness-hacka. Todo campo não listado aqui usa o padrão.",
+  "project": "harness-hacka",
+  "profile": "python",
+  "housekeeping": {
+    "stale_after_days": 45,
+    "markers": ["TODO", "[HIPÓTESE]", "provisório"]
+  }
+}

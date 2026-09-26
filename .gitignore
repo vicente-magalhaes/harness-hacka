@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+*.log
+
+# Estado local do Claude Code em cada máquina. A config do harness (.claude/harness-hacka.json)
+# é o gate e precisa ir para o git.
+.claude/settings.local.json
+.claude/worktrees/

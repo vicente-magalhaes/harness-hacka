@@ -1,0 +1,3 @@
+# LF no repositório. O harness é escrito no Windows e o CI roda em Linux; shell com CRLF
+# quebra de formas difíceis de ler. O bin/harness-hacka precisa de LF para o shebang funcionar.
+* text=auto eol=lf

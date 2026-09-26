@@ -1,0 +1,5 @@
+{
+  "$comment": "Config do harness-hacka. A presença deste arquivo liga o harness neste projeto. Todo campo tem padrão: escreva só o que difere. Referência: README do harness-hacka.",
+  "project": "{{project}}",
+  "profile": "{{profile}}"
+}

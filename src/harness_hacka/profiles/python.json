@@ -1,0 +1,16 @@
+{
+  "name": "python",
+  "description": "Python com uv, pytest e ruff. FastAPI, Docker e migrações SQL comuns.",
+  "triggers": {
+    "pyproject.toml": "dependência ou ferramenta nova",
+    "requirements*.txt": "dependência nova",
+    "Dockerfile*": "imagem ou ambiente de execução",
+    "docker-compose*.yml": "serviço ou infraestrutura",
+    "compose*.yaml": "serviço ou infraestrutura",
+    "**/migrations/**": "estrutura do banco",
+    "alembic.ini": "estratégia de migração",
+    ".github/workflows/**": "CI ou deploy"
+  },
+  "verify": ["uv run pytest", "uv run ruff check ."],
+  "markers": ["TODO", "[HIPÓTESE]", "provisório"]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "nextjs",
+  "description": "Next.js com TypeScript, npm e ESLint. App Router, Prisma e Vercel comuns.",
+  "triggers": {
+    "package.json": "dependência nova ou script de build",
+    "next.config.*": "configuração do framework",
+    "middleware.ts": "autenticação, rotas ou headers",
+    "tsconfig.json": "regras do compilador",
+    "prisma/schema.prisma": "estrutura do banco",
+    "**/migrations/**": "estrutura do banco",
+    "vercel.json": "deploy",
+    ".github/workflows/**": "CI ou deploy"
+  },
+  "verify": ["npm run lint", "npx tsc --noEmit", "npm test"],
+  "markers": ["TODO", "[HIPÓTESE]", "provisório"]
+}

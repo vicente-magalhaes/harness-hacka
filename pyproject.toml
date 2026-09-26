@@ -1,0 +1,42 @@
+[project]
+name = "harness-hacka"
+version = "0.1.0"
+description = "Memória de projeto para agentes de código: notas, decisões e diário, com housekeeping e decisão humana."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Vicente Magalhães" }]
+# >=3.10: nada aqui usa API mais nova (tomllib, datetime.UTC, StrEnum). Os hooks rodam com o
+# python que estiver no PATH da máquina, e 3.10 ainda é comum.
+requires-python = ">=3.10"
+# Zero dependências, e isso é requisito: os hooks rodam fora do venv do projeto.
+dependencies = []
+
+[project.scripts]
+harness-hacka = "harness_hacka.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness_hacka"]
+
+[tool.ruff]
+# 100, não 88: comentário em português mede mais que o mesmo em inglês, e o comentário aqui
+# carrega o porquê. Com 88, a correção vira encurtar a explicação.
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

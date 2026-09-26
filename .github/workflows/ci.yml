@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Testes e lint (${{ matrix.os }})
+    # Windows e Linux: o harness é escrito no Windows e roda em runner Linux. Caminho com
+    # barra invertida, CRLF e o encoding do console são os pontos que divergem.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+      # O harness usa o próprio harness: a memória deste repositório também é auditada.
+      - run: python bin/harness-hacka.py check
+
+  plain-python:
+    name: Hooks com o python do PATH (${{ matrix.python }})
+    # Sem venv e sem dependência: é assim que o Claude Code roda os hooks. Se um import de
+    # terceiro entrar em src/ por engano, é este job que pega. 3.10 é o piso declarado.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Gate e guard contra um projeto novo
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/proj /tmp/other
+          python bin/harness-hacka.py --project /tmp/proj init --profile python
+          python bin/harness-hacka.py --project /tmp/proj check
+          ev='{"session_id":"ci","tool_name":"Read","tool_input":{"file_path":"id_rsa"}}'
+          out=$(echo "$ev" | CLAUDE_PROJECT_DIR=/tmp/proj python bin/harness-hacka.py hook guard)
+          echo "$out" | grep -q '"permissionDecision": "deny"' || { echo "guard inerte: $out"; exit 1; }
+          out=$(echo "$ev" | CLAUDE_PROJECT_DIR=/tmp/other python bin/harness-hacka.py hook guard)
+          [ -z "$out" ] || { echo "gate furado: $out"; exit 1; }
+          echo "ok"

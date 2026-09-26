@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "harness-hacka",
+  "description": "Memória de projeto para agentes de código: notas, decisões e diário no repositório, housekeeping com subagente e decisão humana garantida por hook.",
+  "author": { "name": "Vicente Magalhães" },
+  "license": "MIT",
+  "keywords": ["memory", "decisions", "adr", "journal", "housekeeping", "governance", "hooks"]
+}
