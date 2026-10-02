@@ -182,6 +182,32 @@ class TestHumanDecision:
         command = "echo status: accepted > memory/decisions/0001-x.md"
         assert denied(hooks.guard(event("Bash", command=command), cfg_of(project)))
 
+    @pytest.mark.parametrize(
+        "command",
+        [
+            'echo x > "memory/decisions/0001-x.md"',
+            'mv nova.md "memory/decisions/0001-x.md"',
+            "cat a | tee memory/decisions/0001-x.md",
+        ],
+    )
+    def test_quoted_target_still_counts(self, project, command):
+        assert denied(hooks.guard(event("Bash", command=command), cfg_of(project)))
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git commit -F - <<'EOF'\n- docs/adr -> memory/decisions, por git mv\nEOF",
+            'git commit -m "mover para memory/decisions com git mv; ok"',
+            "git log --oneline -- memory/decisions/",
+        ],
+    )
+    def test_commit_message_about_decisions_is_not_an_edit(self, project, command):
+        assert hooks.guard(event("Bash", command=command), cfg_of(project)) is None
+
+    def test_quoted_path_of_a_delete_still_counts(self, project):
+        command = 'rm "memory/velha.md"'
+        assert denied(hooks.guard(event("Bash", command=command), cfg_of(project)))
+
 
 class TestGitHooks:
     @pytest.mark.parametrize(

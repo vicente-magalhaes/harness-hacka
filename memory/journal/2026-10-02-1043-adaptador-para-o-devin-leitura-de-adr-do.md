@@ -28,10 +28,13 @@ viesse do Devin, e o perfil `nextjs` não via o schema dentro de `web/`.
 - Trocar a regex do `_LINK` por script Python em heredoc → o `\[` virou escape inválido e o
   `assert` barrou sem gravar nada. **Lesson:** regex com barra invertida se troca pela
   ferramenta de edição, não por string Python dentro de heredoc.
+- Guard procurando verbo e caminho da decisão no comando inteiro → negou o `git commit` da
+  migração da Poli Bridge pela mensagem. **Lesson:** ver `lessons.md`; corrigido com
+  `_shell_pieces`.
 
 ## Verification
 
-- `uv run pytest`: 162 passando (eram 114). `ruff check` e `ruff format --check` limpos.
+- `uv run pytest`: 169 passando (eram 114). `ruff check` e `ruff format --check` limpos.
 - `python bin/harness-hacka.py check`: 0 erros, 1 aviso (0001 proposta). Passo novo do CI
   simulado no Git Bash: saída 2 e `decision: block`.
 - Contra a Poli Bridge: `check` com 0 erros sobre os ADRs reais do harness-memoria.

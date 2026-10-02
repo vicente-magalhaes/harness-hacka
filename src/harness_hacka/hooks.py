@@ -433,6 +433,37 @@ def _forces_add(git: re.Match[str]) -> bool:
     )
 
 
+_HIDDEN = re.compile(r"\x00(\d+)\x00")
+_HIDDEN_AFTER_REDIRECT = re.compile(r"(>{1,2}\s*)\x00(\d+)\x00")
+
+
+def _shell_pieces(command: str) -> list[tuple[str, str, str]]:
+    """Cada comando do shell, separado fora das aspas, em três leituras.
+
+    `raw` tem tudo: o caminho citado de um `rm` ou de um `mv` conta. `bare` troca o texto entre
+    aspas por `''`: verbo dentro da mensagem de commit ("por git mv") não é verbo. `redirect`
+    só mantém o texto entre aspas logo depois de `>`, que é alvo de escrita. Corpo de heredoc
+    sai das três: é conteúdo, não comando.
+    """
+    quoted: list[str] = []
+
+    def hide(match: re.Match[str]) -> str:
+        quoted.append(match.group(0))
+        return f"\x00{len(quoted) - 1}\x00"
+
+    masked = _QUOTED.sub(hide, _HEREDOC.sub("", command))
+    pieces = []
+    for piece in _SEPARATOR.split(masked):
+        raw = _HIDDEN.sub(lambda m: quoted[int(m.group(1))], piece)
+        bare = _HIDDEN.sub("''", piece)
+        redirect = _HIDDEN.sub(
+            "''",
+            _HIDDEN_AFTER_REDIRECT.sub(lambda m: m.group(1) + quoted[int(m.group(2))], piece),
+        )
+        pieces.append((raw, bare, redirect))
+    return pieces
+
+
 def _git_bypass(command: str, secrets: bool, hooks: bool) -> str | None:
     clean = _QUOTED.sub("''", _HEREDOC.sub("", command))
     for piece in _SEPARATOR.split(clean):
@@ -488,12 +519,12 @@ def guard(event: Event, cfg: config.Config) -> dict[str, Any] | None:
         in_memory = re.compile(rf"(^|[\s\"'=/\\]){folder}([/\\\s\"']|$)")
         in_decisions = re.compile(rf"{folder}[/\\]+decisions([/\\\s\"']|$)")
         redirects = re.compile(rf">{{1,2}}\s*[\"']?[^\s\"'|;&]*{folder}[/\\]+decisions")
-        for piece in _SEPARATOR.split(command):
-            if _DELETE.search(piece) and in_memory.search(piece):
+        for raw, bare, redirect in _shell_pieces(command):
+            if _DELETE.search(raw) and in_memory.search(raw):
                 return _deny(_MEMORY_IS_ARCHIVED)
             if cfg.human_decisions and (
-                (in_decisions.search(piece) and _SHELL_WRITE.search(piece))
-                or redirects.search(piece)
+                (in_decisions.search(raw) and _SHELL_WRITE.search(bare))
+                or redirects.search(redirect)
             ):
                 return _deny(
                     "Decisão se edita pela ferramenta de edição, não pelo shell: é assim que o "

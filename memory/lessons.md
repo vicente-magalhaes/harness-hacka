@@ -31,3 +31,7 @@ fim: o mais novo aparece primeiro.
 - Tratar a contagem de marcadores como veredito → a nota que descreve a convenção ("marcar
   [HIPÓTESE] no que não foi validado") conta como provisória (o inspector pegou, na prévia do
   hacka-itau). **Lesson:** marcador é pista para o inspector; quem julga é ele.
+- Procurar o verbo de escrita e o caminho da decisão em qualquer parte do comando shell → a
+  mensagem de um `git commit` que citava os dois foi negada (na migração da Poli Bridge).
+  **Lesson:** verbo e redirecionamento se procuram fora das aspas e do heredoc; o caminho
+  citado de `rm`, `mv` e `>` continua contando.
