@@ -1,9 +1,9 @@
 # harness-hacka
 
-Plugin do Claude Code e CLI em Python (só biblioteca padrão) que guarda a memória de um
-projeto no próprio repositório: notas, decisões e diário. Um housekeeping com subagente
-limpa o que envelheceu, e a decisão humana é garantida por hook. Este repositório usa o
-próprio harness.
+Plugin do Claude Code (o Devin instala o mesmo) e CLI em Python (só biblioteca padrão) que
+guarda a memória de um projeto no próprio repositório: notas, decisões e diário. Um
+housekeeping com subagente limpa o que envelheceu, e a decisão humana é garantida por hook.
+Este repositório usa o próprio harness.
 
 Identificadores em inglês (comandos, status, chaves, pastas, código). Explicação em
 português (mensagens, comentários, documentação).
@@ -18,6 +18,8 @@ português (mensagens, comentários, documentação).
   o modo da sessão e passa sozinho em modo automático.
 - Política de projeto não entra em `src/`. Vem da config do projeto ou de um perfil.
 - Memória não se apaga, se arquiva.
+- Agente novo entra por `src/harness_hacka/agents.py`, que traduz evento e resposta. O guard
+  e as outras ações falam um dialeto só (decisão 0002).
 - Falso positivo em cheque ou no guard é defeito, não excesso de zelo. Ensina a ignorar.
 
 ## Como trabalhar aqui

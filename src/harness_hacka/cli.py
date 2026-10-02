@@ -9,7 +9,9 @@ harness-hacka new journal "Título"         registro do diário desta sessão
 harness-hacka new housekeeping             registro de um housekeeping
 harness-hacka archive CAMINHO --reason M   tira da memória ativa sem apagar
 harness-hacka init [--profile P]           config e esqueleto da memória (não sobrescreve)
+harness-hacka init --agent devin           também os arquivos que o Devin lê (.devin/)
 harness-hacka profiles                     perfis de stack disponíveis
+harness-hacka events [--json]              os hooks que rodaram nesta máquina, e de qual agente
 """
 
 from __future__ import annotations
@@ -151,10 +153,18 @@ def cmd_init(args: argparse.Namespace) -> int:
             f"harness-hacka: perfil '{args.profile}' não existe. Disponíveis: {options}"
         )
     created = scaffold.skeleton(root, args.memory_dir, args.name or root.name, args.profile or "")
+    skipped: list[Path] = []
+    if args.agent == "devin":
+        made, skipped = scaffold.devin(root)
+        created += made
     for c in created:
         print(f"criado: {c.relative_to(root).as_posix()}")
+    for s in skipped:
+        print(f"já existe, não mexi: {s.relative_to(root).as_posix()}")
     if not created:
         print("nada a criar: tudo já existe")
+    if args.agent == "devin":
+        print(scaffold.DEVIN_NEXT_STEPS)
     cfg = config.load(root)
     if cfg is not None:
         from . import index
@@ -169,6 +179,25 @@ def cmd_profiles(args: argparse.Namespace) -> int:
     for name in config.available_profiles():
         data = json.loads((config.PROFILES_DIR / f"{name}.json").read_text(encoding="utf-8"))
         print(f"{name:10} {data.get('description', '')}")
+    return 0
+
+
+def cmd_events(args: argparse.Namespace) -> int:
+    from . import state
+
+    events = state.recorded_events()
+    if args.json:
+        print(json.dumps(events, ensure_ascii=False, indent=2))
+        return 0
+    if not events:
+        print(
+            "nenhum hook do harness-hacka rodou nesta máquina desde o último reboot. Se o "
+            "agente devia ter rodado, os hooks não estão ligados aqui."
+        )
+        return 0
+    for e in events:
+        tool = f" {e['tool_name']}({', '.join(e['tool_input_keys'])})" if e["tool_name"] else ""  # type: ignore[arg-type]
+        print(f"{e['at']}  {e['agent']:6} {e['hook']}{tool}")
     return 0
 
 
@@ -212,21 +241,29 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("--profile", default="")
     s.add_argument("--name", default="", help="nome do projeto")
     s.add_argument("--memory-dir", default="memory", help="pasta da memória")
+    s.add_argument(
+        "--agent", choices=["devin"], help="também os arquivos que esse agente lê no projeto"
+    )
     s.set_defaults(func=cmd_init)
 
     s = sub.add_parser("profiles", help="perfis de stack")
     s.set_defaults(func=cmd_profiles)
 
+    s = sub.add_parser("events", help="hooks que rodaram nesta máquina (diagnóstico)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_events)
+
     s = sub.add_parser("hook", help="uso interno do plugin")
     s.add_argument("name")
-    s.set_defaults(func=lambda a: _hook(a.name))
+    s.add_argument("--agent", default="", help="claude ou devin (padrão: detecta pelo ambiente)")
+    s.set_defaults(func=lambda a: _hook(a.name, a.agent))
     return p
 
 
-def _hook(name: str) -> int:
+def _hook(name: str, agent: str = "") -> int:
     from .hooks import run
 
-    return run(name)
+    return run(name, agent)
 
 
 def main(argv: list[str] | None = None) -> int:

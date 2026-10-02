@@ -4,9 +4,13 @@ Três regras valem para todos:
 
 1. Sem `.claude/harness-hacka.json` no projeto, sai calado (o gate).
 2. Nunca derruba a sessão. Qualquer exceção vira aviso no stderr e saída 0. Um harness de
-   memória que quebra o trabalho custa mais do que entrega.
+   memória que quebra o trabalho custa mais do que entrega. A única saída diferente de 0 é o
+   bloqueio, para o agente que bloqueia por código de saída (o Devin, com 2).
 3. Proibição que importa é `deny`, não `ask`. O `ask` segue o modo da sessão e, em modo
    automático, pode passar sem ninguém ver. O `deny` bloqueia em qualquer modo.
+
+O evento chega no dialeto do agente e é traduzido para o do Claude Code em `agents.py`. Daqui
+para baixo, tudo fala um dialeto só.
 """
 
 from __future__ import annotations
@@ -19,9 +23,9 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from . import config, sensitive, state
+from . import agents, config, sensitive, state
 from . import frontmatter as fm
-from .memory import normalize_status, parse_numbers
+from .memory import field_key, normalize_status, parse_numbers
 
 Event = dict[str, Any]
 
@@ -65,7 +69,7 @@ _SHELL_TOOLS = ("Bash", "PowerShell")
 # entrada
 
 
-def run(name: str) -> int:
+def run(name: str, agent: str = "") -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
         sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
@@ -74,10 +78,12 @@ def run(name: str) -> int:
             print(f"[harness-hacka] hook desconhecido: {name}", file=sys.stderr)
             return 0
         try:
-            event: Event = json.loads(sys.stdin.read() or "{}")
+            raw: Event = json.loads(sys.stdin.read() or "{}")
         except ValueError:
             return 0
-        root = _root(event)
+        if not isinstance(raw, dict):
+            return 0
+        root = _root(raw)
         if root is None:
             return 0
         try:
@@ -87,20 +93,33 @@ def run(name: str) -> int:
             return 0
         if cfg is None:
             return 0
-        output = action(event, cfg)
-        if output:
-            print(json.dumps(output, ensure_ascii=False))
-        return 0
+        who = agents.detect(explicit=agent)
+        state.record_event(name, who, raw)
+        output = action({**agents.normalize(raw), AGENT_KEY: who}, cfg)
+        stdout, stderr, code = agents.render(output, who)
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(stderr, file=sys.stderr)
+        return code
     except Exception as error:  # noqa: BLE001 - hook nunca derruba a sessão
         print(f"[harness-hacka] hook {name} falhou e foi liberado: {error!r}", file=sys.stderr)
         return 0
+
+
+# Chave que o `run` acrescenta ao evento para as ações saberem de qual agente ele veio.
+AGENT_KEY = "harness_hacka_agent"
 
 
 def _root(event: Event) -> Path | None:
     # Quem diz qual é o projeto é a plataforma. Cair no próximo candidato quando o primeiro não
     # tem config faria a política de um projeto agir dentro de outro (o cwd do processo pode
     # ser qualquer lugar). Só sem nenhuma indicação vale a pasta atual.
-    given = os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd")
+    given = (
+        os.environ.get("CLAUDE_PROJECT_DIR")
+        or os.environ.get("DEVIN_PROJECT_DIR")
+        or event.get("cwd")
+    )
     return config.find_root(Path(str(given) if given else os.getcwd()))
 
 
@@ -126,6 +145,12 @@ def session_start(event: Event, cfg: config.Config) -> dict[str, Any] | None:
     from . import briefing
     from .memory import load
 
+    # No Devin CLI, o mesmo projeto pode registrar o hook duas vezes: pelo plugin e pelo
+    # `.devin/hooks.v1.json`, e o Devin roda os dois. Duas cópias do resumo são 12 mil chars.
+    if event.get(AGENT_KEY) == agents.DEVIN and not state.once_within(
+        str(event.get("session_id", "")), f"session-start:{event.get('source', '')}", 30
+    ):
+        return None
     return _context("SessionStart", briefing.build(load(cfg), date.today()))
 
 
@@ -261,7 +286,7 @@ def _unlocked(cfg: config.Config, session: str) -> set[int]:
                 fields, _ = fm.split(path.read_text(encoding="utf-8-sig"))
             except (OSError, fm.InvalidFrontmatter):
                 continue
-            unlocked |= set(parse_numbers(fm.as_list(fields, "supersedes")))
+            unlocked |= set(parse_numbers(fm.as_list(fields, field_key(fields, "supersedes"))))
     return unlocked
 
 
@@ -274,7 +299,31 @@ def _status_change(
     before, after = _status(current), _status(_text_after(current, tool_input, tool))
     if before == after or "accepted" not in (before, after):
         return None
-    number = int(target.name[:4])
+    return _locked(cfg, int(target.name[:4]), after, session)
+
+
+def _secret_file(rel: str) -> str:
+    return (
+        f"`{rel}` parece arquivo de segredo (.env, chave, credencial). Agente não lê nem "
+        "escreve segredo. Documente a variável no .env.example e peça para uma pessoa cuidar "
+        "do valor real."
+    )
+
+
+def _secret_in_memory(kinds: list[str], rel: str) -> str:
+    return (
+        f"Isto gravaria {', '.join(kinds)} em `{rel}`. Memória não guarda segredo: escreva o "
+        "nome da variável, nunca o valor."
+    )
+
+
+def _in_memory(cfg: config.Config, target: Path) -> bool:
+    return _inside(target, cfg.memory) or any(
+        _inside(target, cfg.root / f) for f in cfg.index_files
+    )
+
+
+def _locked(cfg: config.Config, number: int, after: str, session: str) -> str | None:
     if number in _unlocked(cfg, session):
         return None
     verb = "Aceitar" if after == "accepted" else "Tirar de accepted"
@@ -285,12 +334,125 @@ def _status_change(
     )
 
 
+_STATUS_LINE = re.compile(r"^\s*status\s*:\s*(.*?)\s*$", re.IGNORECASE)
+
+
+def _patch_status_change(
+    cfg: config.Config, target: Path, change: agents.FileChange, session: str
+) -> str | None:
+    """Patch não dá o texto final, só as linhas que entram e saem. Basta uma linha de status
+    com `accepted` de um lado só para a mudança precisar de uma pessoa."""
+    if not re.match(r"^\d{4}-", target.name) or target.suffix.lower() != ".md":
+        return None
+
+    def statuses(lines: list[str]) -> set[str]:
+        return {normalize_status(m.group(1)) for m in map(_STATUS_LINE.match, lines) if m}
+
+    added, removed = statuses(change.added), statuses(change.removed)
+    if "accepted" not in added ^ removed:
+        return None
+    return _locked(cfg, int(target.name[:4]), "accepted" if "accepted" in added else "", session)
+
+
+def _guard_patch(cfg: config.Config, patch: str, session: str) -> dict[str, Any] | None:
+    for raw, change in agents.parse_patch(patch).items():
+        target = _path(cfg, raw)
+        rel = _rel(cfg, target)
+        if cfg.guard_secrets and is_secret(rel):
+            return _deny(_secret_file(rel))
+        if change.deleted and _inside(target, cfg.memory):
+            return _deny(_MEMORY_IS_ARCHIVED)
+        if cfg.guard_memory_secrets and _in_memory(cfg, target):
+            kinds = sorted(sensitive.find_secrets("\n".join(change.added)))
+            if kinds:
+                return _deny(_secret_in_memory(kinds, rel))
+        if cfg.human_decisions and _inside(target, cfg.decisions):
+            reason = _patch_status_change(cfg, target, change, session)
+            if reason:
+                return _deny(reason)
+    return None
+
+
+_MEMORY_IS_ARCHIVED = (
+    "Memória não se apaga, se arquiva. Use `harness-hacka archive <caminho> --reason "
+    '"..."`: o arquivo sai do caminho e o histórico fica.'
+)
+
+# Texto entre aspas e corpo de heredoc saem antes de procurar `--no-verify`: a mensagem de
+# commit "nunca use --no-verify" não pula hook nenhum, e negá-la ensina a ignorar o guard.
+_QUOTED = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.DOTALL | re.MULTILINE)
+_GIT = re.compile(
+    r"^\s*(?P<env>(?:[A-Za-z_]\w*=\S*\s+)*)(?:sudo\s+)?git"
+    r"(?P<opts>(?:\s+(?:-[Cc]\s+\S+|--[\w-]+(?:=\S+)?))*)\s+(?P<sub>[\w-]+)(?P<rest>.*)$"
+)
+_HOOKS_OFF_ENV = re.compile(r"\bHUSKY=0\b|\bHUSKY_SKIP_HOOKS=1\b")
+# Opções curtas do `git commit` que levam valor: o que vem colado depois delas é o valor, não
+# outra opção. `-mnovo` é a mensagem "novo", não `-n`.
+_COMMIT_VALUE_FLAGS = set("mFCctS")
+
+
+def _short_flag(rest: str, flag: str, value_flags: set[str]) -> bool:
+    for cluster in re.findall(r"(?:^|\s)-([A-Za-z][\w]*)", rest):
+        for char in cluster:
+            if char == flag:
+                return True
+            if char in value_flags:
+                break
+    return False
+
+
+_SKIPS_GIT_HOOKS = (
+    "Isto pula os hooks do git (`--no-verify`, `-n` no commit, `HUSKY=0` ou `core.hooksPath`). "
+    "Eles são a checagem que roda antes do código sair daqui. Se o hook reprovou, corrija o "
+    "que ele acusou; se o hook está errado, peça para uma pessoa decidir."
+)
+_FORCED_ADD = (
+    "`git add --force` passa por cima do .gitignore, que é o que segura segredo fora do git. "
+    "Se o arquivo deve mesmo ir para o git, tire-o do .gitignore numa mudança à parte, que "
+    "uma pessoa revisa."
+)
+
+
+def _skips_hooks(git: re.Match[str]) -> bool:
+    sub, rest = git.group("sub"), git.group("rest")
+    if sub not in ("commit", "push"):
+        return False
+    return bool(
+        "--no-verify" in rest.split()
+        or (sub == "commit" and _short_flag(rest, "n", _COMMIT_VALUE_FLAGS))
+        or _HOOKS_OFF_ENV.search(git.group("env"))
+        or "core.hookspath" in git.group("opts").casefold()
+    )
+
+
+def _forces_add(git: re.Match[str]) -> bool:
+    rest = git.group("rest")
+    return git.group("sub") == "add" and (
+        "--force" in rest.split() or _short_flag(rest, "f", set())
+    )
+
+
+def _git_bypass(command: str, secrets: bool, hooks: bool) -> str | None:
+    clean = _QUOTED.sub("''", _HEREDOC.sub("", command))
+    for piece in _SEPARATOR.split(clean):
+        git = _GIT.match(piece)
+        if git and hooks and _skips_hooks(git):
+            return _SKIPS_GIT_HOOKS
+        if git and secrets and _forces_add(git):
+            return _FORCED_ADD
+    return None
+
+
 def guard(event: Event, cfg: config.Config) -> dict[str, Any] | None:
     tool = str(event.get("tool_name", ""))
     tool_input = event.get("tool_input") or {}
     if not isinstance(tool_input, dict):
         return None
     session = str(event.get("session_id", ""))
+
+    if tool == "ApplyPatch":
+        return _guard_patch(cfg, str(tool_input.get("patch") or ""), session)
 
     if tool in (*_EDIT_TOOLS, "Read"):
         raw = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
@@ -299,23 +461,13 @@ def guard(event: Event, cfg: config.Config) -> dict[str, Any] | None:
         target = _path(cfg, str(raw))
         rel = _rel(cfg, target)
         if cfg.guard_secrets and is_secret(rel):
-            return _deny(
-                f"`{rel}` parece arquivo de segredo (.env, chave, credencial). Agente não lê "
-                "nem escreve segredo. Documente a variável no .env.example e peça para uma "
-                "pessoa cuidar do valor real."
-            )
+            return _deny(_secret_file(rel))
         if tool == "Read":
             return None
-        in_memory = _inside(target, cfg.memory) or any(
-            _inside(target, cfg.root / f) for f in cfg.index_files
-        )
-        if cfg.guard_memory_secrets and in_memory:
+        if cfg.guard_memory_secrets and _in_memory(cfg, target):
             kinds = sorted({k for t in _new_texts(tool_input) for k in sensitive.find_secrets(t)})
             if kinds:
-                return _deny(
-                    f"Isto gravaria {', '.join(kinds)} em `{rel}`. Memória não guarda segredo: "
-                    "escreva o nome da variável, nunca o valor."
-                )
+                return _deny(_secret_in_memory(kinds, rel))
         if cfg.human_decisions and _inside(target, cfg.decisions):
             reason = _status_change(cfg, target, tool_input, tool, session)
             if reason:
@@ -329,16 +481,16 @@ def guard(event: Event, cfg: config.Config) -> dict[str, Any] | None:
                 "Este comando mexe com arquivo de segredo (.env, chave, credencial). Operação "
                 "com segredo real não passa por agente: peça para uma pessoa rodar."
             )
+        bypass = _git_bypass(command, cfg.guard_secrets, cfg.guard_git_hooks)
+        if bypass:
+            return _deny(bypass)
         folder = re.escape(cfg.memory_dir)
         in_memory = re.compile(rf"(^|[\s\"'=/\\]){folder}([/\\\s\"']|$)")
         in_decisions = re.compile(rf"{folder}[/\\]+decisions([/\\\s\"']|$)")
         redirects = re.compile(rf">{{1,2}}\s*[\"']?[^\s\"'|;&]*{folder}[/\\]+decisions")
         for piece in _SEPARATOR.split(command):
             if _DELETE.search(piece) and in_memory.search(piece):
-                return _deny(
-                    "Memória não se apaga, se arquiva. Use `harness-hacka archive <caminho> "
-                    '--reason "..."`: o arquivo sai do caminho e o histórico fica.'
-                )
+                return _deny(_MEMORY_IS_ARCHIVED)
             if cfg.human_decisions and (
                 (in_decisions.search(piece) and _SHELL_WRITE.search(piece))
                 or redirects.search(piece)
@@ -383,22 +535,26 @@ def triggers(event: Event, cfg: config.Config) -> dict[str, Any] | None:
     if not cfg.triggers:
         return None
     tool_input = event.get("tool_input") or {}
-    raw = tool_input.get("file_path") if isinstance(tool_input, dict) else None
-    if not raw:
+    if not isinstance(tool_input, dict):
         return None
-    target = _path(cfg, str(raw))
-    if _inside(target, cfg.memory):
-        return None
-    rel = _rel(cfg, target)
+    if event.get("tool_name") == "ApplyPatch":
+        paths = list(agents.parse_patch(str(tool_input.get("patch") or "")))
+    else:
+        paths = [tool_input["file_path"]] if tool_input.get("file_path") else []
     session = str(event.get("session_id", ""))
-    for glob, reason in cfg.triggers.items():
-        if matches(rel, glob) and state.first_time(session, f"trigger:{glob}"):
-            return _context(
-                "PostToolUse",
-                f"[harness-hacka] `{rel}` mudou. Esse arquivo costuma carregar decisão ({reason}). "
-                "Se esta mudança é uma escolha nova e não óbvia, ofereça registrar com "
-                "`/harness-hacka:decide`. Se é rotina, siga sem comentar.",
-            )
+    for raw in paths:
+        target = _path(cfg, str(raw))
+        if _inside(target, cfg.memory):
+            continue
+        rel = _rel(cfg, target)
+        for glob, reason in cfg.triggers.items():
+            if matches(rel, glob) and state.first_time(session, f"trigger:{glob}"):
+                return _context(
+                    "PostToolUse",
+                    f"[harness-hacka] `{rel}` mudou. Esse arquivo costuma carregar decisão "
+                    f"({reason}). Se esta mudança é uma escolha nova e não óbvia, ofereça "
+                    "registrar com `/harness-hacka:decide`. Se é rotina, siga sem comentar.",
+                )
     return None
 
 

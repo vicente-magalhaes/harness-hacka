@@ -6,12 +6,16 @@ argument-hint: "[problema + escolha]"
 
 # Registrar uma decisão
 
-`harness-hacka` é o CLI deste plugin. Se o Bash não achar o comando, use
-`python "${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py"` (ou `python3`).
+`harness-hacka` é o CLI deste plugin. Se o shell não achar o comando, use
+`python "${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py"` (ou `python3`). Sem essa variável
+(fora do Claude Code), use
+`uvx --from git+https://github.com/vicente-magalhaes/harness-hacka harness-hacka`.
 
 Você escreve a proposta. Só uma pessoa aceita. Isso não depende de você lembrar: o guard do
 harness nega qualquer edição que ponha `status: accepted` até a pessoa escrever
 `accept NNNN` no chat.
+Onde os hooks não rodam (o Devin na nuvem, por exemplo), não há guard, e a regra vale do
+mesmo jeito: `accepted` só depois de a pessoa escrever `accept NNNN`.
 
 ## 1. Procurar antes de escrever
 

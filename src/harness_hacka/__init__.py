@@ -10,4 +10,4 @@ Só biblioteca padrão. Os hooks rodam com o `python` do PATH, fora de qualquer 
 dependência de terceiro transformaria "instalar o plugin" em "gerenciar um ambiente".
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

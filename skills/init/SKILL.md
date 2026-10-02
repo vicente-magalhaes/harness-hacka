@@ -6,8 +6,10 @@ argument-hint: "[profile: python | nextjs]"
 
 # Instalar o harness-hacka
 
-`harness-hacka` é o CLI deste plugin. Se o Bash não achar o comando, use
-`python "${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py"` (ou `python3`).
+`harness-hacka` é o CLI deste plugin. Se o shell não achar o comando, use
+`python "${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py"` (ou `python3`). Sem essa variável
+(fora do Claude Code), use
+`uvx --from git+https://github.com/vicente-magalhaes/harness-hacka harness-hacka`.
 
 O plugin é o mecanismo. `.claude/harness-hacka.json` é a política deste projeto. A pasta de
 memória é o conteúdo. Esta skill cria a política e o esqueleto do conteúdo. O que o projeto
@@ -17,10 +19,13 @@ já tem vale mais que o modelo: nunca sobrescreva nada em silêncio.
 
 Não escreva nada ainda. Descubra, com números:
 
-- `CLAUDE.md`: existe? Tem tabela de "o que ler quando"? Tem seção de regras?
+- `AGENTS.md` e `CLAUDE.md`: existem? Tem tabela de "o que ler quando"? Tem seção de regras?
+- Agentes: o time usa só Claude Code, ou também Devin (`.devin/`), Codex, Cursor?
 - Memória: pastas como `memory/`, `memoria/`, `docs/`, `notes/`, `adr/`, `decisions/`.
   Quantos arquivos, que formato, se têm frontmatter.
-- Decisões: ADRs em arquivo, ou uma tabela (D-01, D-02) dentro de uma nota?
+- Decisões: ADRs em arquivo, ou uma tabela (D-01, D-02) dentro de uma nota? ADR do
+  harness-memoria (`data:`, `substitui:`, `## Regra`) é lido como está: mover para
+  `decisions/` com `git mv` basta, sem reescrever decisão aceita.
 - Diário: existe? Um arquivo por mês, por sessão?
 - Stack: `pyproject.toml` indica `python`; `package.json` com `next` indica `nextjs`. Rode
   `harness-hacka profiles` para ver os disponíveis.
@@ -77,6 +82,10 @@ nova vai receber: leia com a pessoa e confirme que faz sentido.
 - No `.claude/settings.json` do projeto, `extraKnownMarketplaces` e `enabledPlugins`. O
   README do harness-hacka tem o trecho pronto.
 - Se há CI, um passo com `uvx --from git+https://github.com/<dono>/harness-hacka harness-hacka check`.
+- Se o time usa Devin: `harness-hacka init --agent devin`. Cria `.devin/config.json` (o
+  plugin) e `.devin/hooks.v1.json` (os hooks pelo repositório), e diz o que falta na nuvem.
+- Instrução comum a vários agentes: o conteúdo no `AGENTS.md` e o `CLAUDE.md` com uma linha
+  só, `@AGENTS.md`. Symlink não serve no Windows.
 
 ## 6. Registrar
 

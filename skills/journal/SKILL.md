@@ -6,8 +6,10 @@ argument-hint: "[título do que mudou]"
 
 # Registrar a sessão no journal
 
-`harness-hacka` é o CLI deste plugin. Se o Bash não achar o comando, use
-`python "${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py"` (ou `python3`).
+`harness-hacka` é o CLI deste plugin. Se o shell não achar o comando, use
+`python "${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py"` (ou `python3`). Sem essa variável
+(fora do Claude Code), use
+`uvx --from git+https://github.com/vicente-magalhaes/harness-hacka harness-hacka`.
 
 O registro é o que a próxima sessão recebe logo no início: os next steps e os dead ends.
 Escreva você mesmo, agora. Um subagente não viu esta sessão.

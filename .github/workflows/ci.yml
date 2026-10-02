@@ -53,4 +53,9 @@ jobs:
           echo "$out" | grep -q '"permissionDecision": "deny"' || { echo "guard inerte: $out"; exit 1; }
           out=$(echo "$ev" | CLAUDE_PROJECT_DIR=/tmp/other python bin/harness-hacka.py hook guard)
           [ -z "$out" ] || { echo "gate furado: $out"; exit 1; }
+          # O Devin manda `read` e `path`, e bloqueia pela saída 2.
+          ev='{"session_id":"ci","tool_name":"read","tool_input":{"path":"id_rsa"}}'
+          code=0
+          out=$(echo "$ev" | DEVIN_PROJECT_DIR=/tmp/proj python bin/harness-hacka.py hook guard 2>/dev/null) || code=$?
+          [ "$code" = 2 ] && echo "$out" | grep -q '"decision": "block"' || { echo "guard do Devin inerte: $code $out"; exit 1; }
           echo "ok"

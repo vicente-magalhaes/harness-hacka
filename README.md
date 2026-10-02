@@ -15,6 +15,7 @@ caminho o que envelheceu e não deixa o agente tratar uma proposta como decisão
 → o que envelhece sai do caminho, não do histórico
 → o agente propõe, uma pessoa aceita, e isso é hook, não pedido
 → o núcleo é igual em todo projeto; o que muda por stack é um perfil
+→ o mesmo hook atende Claude Code e Devin; a instrução comum fica no AGENTS.md
 → sem banco, sem serviço, sem dependência
 ```
 
@@ -97,7 +98,9 @@ primeiro e as lições mais antigas depois, e cada corte diz o que ficou de fora
 
 ## Instalação
 
-Precisa de Claude Code, git e Python 3.10 ou mais novo no PATH. Nada para instalar com pip.
+Precisa de git e Python 3.10 ou mais novo no PATH. Nada para instalar com pip.
+
+### Claude Code
 
 ```text
 /plugin marketplace add vicente-magalhaes/harness-hacka
@@ -105,8 +108,8 @@ Precisa de Claude Code, git e Python 3.10 ou mais novo no PATH. Nada para instal
 /harness-hacka:init
 ```
 
-O `/harness-hacka:init` olha o que o projeto já tem (CLAUDE.md, pasta de notas, ADRs,
-diário) e propõe um plano antes de escrever qualquer coisa. Não sobrescreve nada.
+O `/harness-hacka:init` olha o que o projeto já tem (AGENTS.md, CLAUDE.md, pasta de notas,
+ADRs, diário) e propõe um plano antes de escrever qualquer coisa. Não sobrescreve nada.
 
 Para o time inteiro receber o convite ao abrir o projeto, no `.claude/settings.json`:
 
@@ -118,6 +121,34 @@ Para o time inteiro receber o convite ao abrir o projeto, no `.claude/settings.j
   "enabledPlugins": { "harness-hacka@harness-hacka": true }
 }
 ```
+
+### Devin
+
+O Devin instala plugins do Claude Code: lê o mesmo `.claude-plugin/plugin.json`, as mesmas
+skills (`/harness-hacka:decide` e as outras) e, no CLI e no Desktop, o mesmo `hooks/hooks.json`.
+O adaptador traduz o que o Devin manda de diferente: ferramentas em minúsculas (`exec`,
+`edit`, `apply_patch`) e bloqueio pela saída 2. No projeto:
+
+```bash
+harness-hacka init --agent devin
+```
+
+Cria `.devin/config.json`, que pede o plugin a toda sessão do Devin no repositório, e
+`.devin/hooks.v1.json`, que registra os hooks pelo repositório chamando `harness-hacka` do
+PATH. Na nuvem, o CLI entra pelo blueprint (`uv tool install git+https://github.com/vicente-magalhaes/harness-hacka`).
+Se os dois registros valerem na mesma sessão, o resumo do início sai uma vez só.
+
+A documentação do Devin diz que hooks de plugin rodam no CLI e no Desktop, "best effort", e
+não diz se a nuvem roda os hooks do repositório. `harness-hacka events` mostra quais hooks
+rodaram na máquina, de qual agente e com quais chaves (só os nomes, nunca os valores).
+
+### AGENTS.md
+
+Para vários agentes lerem a mesma instrução, o conteúdo fica no `AGENTS.md` e o `CLAUDE.md`
+tem uma linha só, `@AGENTS.md`. O índice gerado e a auditoria valem para os dois arquivos.
+Symlink não serve: no Windows, o git faz checkout dele como arquivo de texto.
+
+### CI
 
 No CI, a auditoria roda sem instalar o plugin:
 
@@ -133,7 +164,8 @@ Um dia de trabalho com o harness ligado:
    valem, o próximo passo da última sessão, o que não repetir e o que está pendente. O
    agente começa sabendo o que a sessão de ontem aprendeu.
 2. **Trabalhar.** O guard fica de fundo. Leitura de `.env` ou chave é negada. Chave colada
-   numa nota é negada. `rm` na memória é negado. Quando uma edição toca um arquivo que
+   numa nota é negada. `rm` na memória é negado. `--no-verify` e `HUSKY=0` são negados.
+   Quando uma edição toca um arquivo que
    costuma carregar decisão (`pyproject.toml`, migração, compose), o agente sugere
    `/harness-hacka:decide` uma vez.
 3. **Decidir.** `/harness-hacka:decide` pergunta o gatilho, as opções e por que cada uma foi
@@ -186,20 +218,24 @@ depois de 30 dias sem commit.
 
 Os status de decisão seguem o [MADR](https://adr.github.io/madr/): `proposed`, `accepted`,
 `rejected`, `deprecated` e `superseded`. Memória que já existe em português (`aceita`,
-`proposta`, `substituída`) é lida sem conversão.
+`proposta`, `substituída`) é lida sem conversão, e o ADR do harness-memoria também: `data:`,
+`substitui:`, `substituido-por:` e `## Regra` valem como `date`, `supersedes`,
+`superseded_by` e `## Rule`. Migrar é mover os arquivos para `decisions/`, sem reescrever
+decisão aceita.
 
 ## O que roda sozinho
 
 | Hook | Quando | O que faz |
 |---|---|---|
 | `SessionStart` | início, retomada, `/clear` e depois de compactar | injeta o resumo: pendências, decisões vivas, último next step, o que não repetir |
-| `SubagentStart` | todo subagente | versão curta: decisões e o que não repetir |
+| `SubagentStart` | todo subagente (só Claude Code) | versão curta: decisões e o que não repetir |
 | `UserPromptSubmit` | cada mensagem sua | se você escreveu `accept NNNN`, registra a aprovação por 30 minutos nesta sessão |
-| `PreToolUse` | antes de ler, escrever ou rodar comando | o guard: nega segredo, chave gravada na memória, `rm` na memória e status de decisão sem aprovação |
+| `PreToolUse` | antes de ler, escrever ou rodar comando | o guard: nega segredo, chave gravada na memória, `rm` na memória, status de decisão sem aprovação e pular os hooks do git |
 | `PostToolUse` | depois de editar | se o arquivo costuma carregar decisão, sugere `/harness-hacka:decide` uma vez por sessão |
 
 Sem `.claude/harness-hacka.json` no projeto, nenhum hook faz nada. Dá para deixar o plugin
-ligado no nível do usuário sem que ele apareça em projeto que não pediu.
+ligado no nível do usuário sem que ele apareça em projeto que não pediu. O Devin roda os
+mesmos hooks, menos o `SubagentStart`, que ele não tem.
 
 ## Comandos
 
@@ -219,7 +255,8 @@ harness-hacka briefing    o bloco que o início de sessão injeta (--subagent: a
 harness-hacka index       índices gerados a partir dos arquivos (--update)
 harness-hacka new         decision, journal ou housekeeping, a partir dos modelos
 harness-hacka archive     tira da memória ativa sem apagar, com git mv e o motivo
-harness-hacka init        config e esqueleto da memória (--profile, --memory-dir)
+harness-hacka init        config e esqueleto da memória (--profile, --memory-dir, --agent devin)
+harness-hacka events      os hooks que rodaram nesta máquina, de qual agente, com quais chaves
 ```
 
 Saída real no projeto de exemplo:
@@ -269,16 +306,18 @@ pode passar sem ninguém ver.
 
 ## Perfis de stack
 
-O núcleo não sabe qual é a stack. O perfil diz quais arquivos costumam carregar decisão e o
+O harness é agnóstico de stack. O perfil diz quais arquivos costumam carregar decisão e o
 que conta como verificação no journal.
 
 | Perfil | Triggers | Verify |
 |---|---|---|
 | `python` | `pyproject.toml`, `Dockerfile*`, `docker-compose*.yml`, migrações, CI | `uv run pytest`, `uv run ruff check .` |
-| `nextjs` | `package.json`, `next.config.*`, `middleware.ts`, `prisma/schema.prisma`, CI | `npm run lint`, `npx tsc --noEmit`, `npm test` |
+| `nextjs` | `package.json`, `next.config.*`, `middleware.ts`, `**/prisma/schema.prisma`, CI | `npm run lint`, `npx tsc --noEmit`, `npm test` |
 
 Outra stack é um JSON de dez linhas em [`src/harness_hacka/profiles/`](src/harness_hacka/profiles/).
-Copie um existente e troque os triggers.
+Copie um existente e troque os triggers. Os perfis valem na raiz e em monorepo: o gatilho
+sem `/` casa com o nome em qualquer pasta. Com pnpm ou monorepo, troque o `verify` na config
+do projeto (`pnpm --filter web lint`).
 
 ## Configuração
 
@@ -300,7 +339,7 @@ padrão; escreva só o que difere.
 |---|---|---|
 | `memory_dir` | `"memory"` | pasta da memória |
 | `profile` | `""` | `python`, `nextjs` ou nenhum |
-| `index.files` | `["CLAUDE.md"]` | onde procurar regiões de índice gerado, além dos READMEs da memória |
+| `index.files` | `["AGENTS.md", "CLAUDE.md"]` | onde procurar regiões de índice gerado, além dos READMEs da memória; arquivo que não existe é ignorado |
 | `housekeeping.stale_after_days` | `30` | nota sem `review_by` vence depois disso sem commit |
 | `housekeeping.journal_after_days` | `7` | registro mais velho que isso entra na triagem |
 | `housekeeping.proposal_after_days` | `3` | proposta parada vira lembrete |
@@ -309,6 +348,7 @@ padrão; escreva só o que difere.
 | `guard.secrets` | `true` | nega ler e escrever `.env`, chaves e credenciais; desligue se o projeto já tem hook próprio |
 | `guard.memory_secrets` | `true` | nega gravar chave ou token na memória |
 | `guard.human_decisions` | `true` | a aprovação de decisão descrita acima |
+| `guard.git_hooks` | `true` | nega pular os hooks do git: `--no-verify`, `commit -n`, `HUSKY=0`, `-c core.hooksPath` |
 | `triggers` | do perfil | glob → motivo; `null` desliga um trigger herdado |
 | `verify` | do perfil | comandos citados como evidência no journal |
 
@@ -337,8 +377,14 @@ para usar os dois no mesmo repositório.
 
 ## Limites conhecidos
 
-- Os hooks são do Claude Code. A memória é markdown puro e outros agentes (Copilot, Codex,
-  Cursor) leem os mesmos arquivos, mas sem briefing e sem guard.
+- Os hooks rodam no Claude Code e no Devin. No Devin, a documentação chama os hooks de
+  plugin de "best effort" e só garante o CLI e o Desktop; a nuvem não está documentada.
+  Onde não há hook, a regra da decisão humana vale pelo texto da skill, e quem segura é a
+  revisão do PR e o `check` no CI. Outros agentes (Copilot, Codex, Cursor) leem a memória e o
+  AGENTS.md, mas sem briefing e sem guard.
+- As chaves que o Devin manda nas ferramentas de arquivo não estão documentadas. O adaptador
+  aceita as grafias comuns (`file_path`, `path`, `file`); `harness-hacka events` mostra as que
+  chegaram de verdade.
 - O guard cobre as ferramentas de edição e os comandos de shell mais comuns. Um script que
   edita a decisão por outro caminho escapa. O `check` pega `accepted` sem `decided_by`.
 - Os padrões de segredo são de alta precisão, não de alta cobertura. Não substituem um
@@ -348,7 +394,8 @@ para usar os dois no mesmo repositório.
 - O housekeeping depende do julgamento do inspector. Por isso toda ação vem com evidência e
   passa por você.
 - Os hooks chamam `python` e, se não houver, `python3`, por um shell POSIX. No Windows isso
-  quer dizer Git Bash, que o Claude Code já usa.
+  quer dizer Git Bash, que o Claude Code já usa. Que shell o Devin usa no Windows não está
+  documentado.
 
 ## Desenvolvimento
 

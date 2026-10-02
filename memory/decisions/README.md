@@ -7,6 +7,7 @@ seguem o MADR.
 | Decisão | Título | Status |
 |---|---|---|
 | [0001](0001-harness-proprio-em-repositorio-separado.md) | Harness próprio, em repositório separado, distribuído como plugin | proposed |
+| [0002](0002-um-adaptador-por-agente-com-o-nucleo-no-dialeto.md) | Um adaptador por agente, com o núcleo no dialeto do Claude Code | proposed |
 <!-- /harness-hacka:decisions -->
 
 | Status | Quer dizer |

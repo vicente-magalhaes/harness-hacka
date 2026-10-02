@@ -75,6 +75,63 @@ def new_housekeeping(memory: Memory, author: str, now: datetime) -> Path:
     return _write(path, text)
 
 
+# De onde os agentes instalam o harness. É o endereço do próprio harness, não política de projeto.
+PLUGIN_SOURCE = "vicente-magalhaes/harness-hacka"
+PLUGIN_GIT = f"git+https://github.com/{PLUGIN_SOURCE}"
+
+DEVIN_NEXT_STEPS = f"""
+Devin: o que estes arquivos fazem e o que falta.
+- .devin/config.json pede o plugin ao Devin: skills /harness-hacka:* na nuvem, no CLI e no
+  Desktop. Hooks de plugin, o Devin só roda no CLI e no Desktop.
+- .devin/hooks.v1.json registra os hooks pelo repositório e chama `harness-hacka` do PATH.
+  Na nuvem, instale o CLI no blueprint do repositório:
+      initialize: |
+        pip install uv
+        uv tool install {PLUGIN_GIT}
+  A documentação do Devin não diz se a nuvem roda hooks de repositório. Para conferir,
+  peça numa sessão: rode `harness-hacka events`.
+"""
+
+
+def _hook_command(name: str) -> str:
+    # POSIX: a nuvem do Devin é Linux. Sem o CLI no PATH, avisa e libera em vez de falhar.
+    return (
+        f"if command -v harness-hacka >/dev/null 2>&1; then exec harness-hacka hook {name} "
+        f"--agent devin; fi; echo '[harness-hacka] harness-hacka fora do PATH, hook {name} "
+        f"desligado. Instale com: uv tool install {PLUGIN_GIT}' >&2"
+    )
+
+
+def devin_hooks() -> dict[str, object]:
+    def entry(name: str, timeout: int, matcher: str | None = None) -> dict[str, object]:
+        hook = {"type": "command", "command": _hook_command(name), "timeout": timeout}
+        return {**({"matcher": matcher} if matcher else {}), "hooks": [hook]}
+
+    return {
+        "SessionStart": [entry("session-start", 20)],
+        "UserPromptSubmit": [entry("approval", 10)],
+        "PreToolUse": [entry("guard", 10, "^(read|write|edit|apply_patch|notebook_edit|exec)$")],
+        "PostToolUse": [entry("triggers", 10, "^(write|edit|apply_patch|notebook_edit)$")],
+    }
+
+
+def devin(root: Path) -> tuple[list[Path], list[Path]]:
+    """Os arquivos que o Devin lê no projeto. Devolve (criados, já existiam)."""
+    import json
+
+    targets = {
+        root / ".devin" / "config.json": {"requiredPlugins": [PLUGIN_SOURCE]},
+        root / ".devin" / "hooks.v1.json": devin_hooks(),
+    }
+    created, skipped = [], []
+    for path, data in targets.items():
+        if path.exists():
+            skipped.append(path)
+        else:
+            created.append(_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n"))
+    return created, skipped
+
+
 def skeleton(root: Path, memory_dir: str, project: str, profile: str) -> list[Path]:
     """Cria o que faltar. Nunca sobrescreve: o histórico do projeto vale mais que o modelo."""
     config_text = render_template("config.json", project=project, profile=profile)

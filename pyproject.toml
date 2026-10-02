@@ -1,6 +1,6 @@
 [project]
 name = "harness-hacka"
-version = "0.1.0"
+version = "0.2.0"
 description = "Memória de projeto para agentes de código: notas, decisões e diário, com housekeeping e decisão humana."
 readme = "README.md"
 license = "MIT"

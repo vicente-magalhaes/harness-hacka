@@ -1,5 +1,5 @@
 {
-  "$comment": "Todo hook é inerte num projeto sem .claude/harness-hacka.json: o gate está no código (config.load), não aqui. `python` primeiro porque no Windows `python3` pode ser o atalho da Microsoft Store; `python3` em seguida porque no macOS e em Linux sem python-is-python3 o nome `python` não existe.",
+  "$comment": "Todo hook é inerte num projeto sem .claude/harness-hacka.json: o gate está no código (config.load), não aqui. O Devin CLI também lê este arquivo quando o plugin é instalado nele, e manda as ferramentas em minúsculas (exec, edit): por isso os matchers listam os dois dialetos. `python` primeiro porque no Windows `python3` pode ser o atalho da Microsoft Store; `python3` em seguida porque no macOS e em Linux sem python-is-python3 o nome `python` não existe.",
   "hooks": {
     "SessionStart": [
       {
@@ -39,7 +39,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "matcher": "Read|Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|^(read|write|edit|apply_patch|notebook_edit|exec)$",
         "hooks": [
           {
             "type": "command",
@@ -51,7 +51,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "Write|Edit|MultiEdit|^(write|edit|apply_patch|notebook_edit)$",
         "hooks": [
           {
             "type": "command",

@@ -171,3 +171,58 @@ def test_unfilled_template_fails_with_the_right_line(project):
     found = [f for f in audit(memory_of(project), TODAY, {}) if f.code == "unfilled-template"]
     line = text.splitlines().index("- {mudança concreta e verificável}") + 1
     assert [(f.level, f.line) for f in found] == [("error", line)]
+
+
+MEMORIA_ADR = """
+    ---
+    status: {status}
+    data: 2026-09-09
+    {extra}
+    ---
+
+    # ADR-{number} — {title}
+
+    ## Regra
+
+    - Faça como o ADR manda.
+
+    ## Contexto
+
+    Texto.
+    """
+
+
+def memoria_adr(root, number, title, status="accepted", extra="decided_by: Pessoa"):
+    import textwrap
+
+    text = (
+        textwrap.dedent(MEMORIA_ADR)
+        .lstrip("\n")
+        .format(status=status, extra=extra, number=f"{number:04d}", title=title)
+    )
+    slug = title.lower().replace(" ", "-")
+    return write(root, f"memory/decisions/{number:04d}-{slug}.md", text)
+
+
+def test_reads_decisions_in_the_harness_memoria_vocabulary(project):
+    memoria_adr(project, 1, "Banco antigo", "superseded", "substituido-por: [ADR-0002]")
+    memoria_adr(project, 2, "Banco novo", extra="decided_by: Pessoa\nsubstitui: [ADR-0001]")
+    memory = memory_of(project)
+    old, new = memory.decision(1), memory.decision(2)
+    assert old.decision_date == date(2026, 9, 9) and old.superseded_by == [2]
+    assert new.supersedes == [1] and new.rule == ["Faça como o ADR manda."]
+    assert new.title == "Banco novo"
+    assert codes(project, "error") == set()
+
+
+def test_link_to_a_nextjs_route_group_is_not_broken(project):
+    (project / "web/src/app/(backend)/services").mkdir(parents=True)
+    write(
+        project,
+        "memory/rotas.md",
+        "---\nread_when: x\n---\n# Rotas\n\n"
+        "[serviços](../web/src/app/(backend)/services/) e [sumiu](../web/src/app/(frontend)/x/)\n",
+    )
+    findings = audit(memory_of(project), TODAY, {})
+    broken = [f.message for f in findings if f.code == "broken-link"]
+    assert broken == ["link para `../web/src/app/(frontend)/x/`, que não existe"]

@@ -183,6 +183,52 @@ class TestHumanDecision:
         assert denied(hooks.guard(event("Bash", command=command), cfg_of(project)))
 
 
+class TestGitHooks:
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git commit --no-verify -m 'x'",
+            "git commit -nm 'x'",
+            "git commit -m 'x' -n",
+            "git add . && git commit -an -m x",
+            "HUSKY=0 git commit -m x",
+            "git -c core.hooksPath=/dev/null commit -m x",
+            "git push --no-verify origin main",
+            "git -C web commit --no-verify",
+        ],
+    )
+    def test_denies_skipping_git_hooks(self, project, command):
+        output = hooks.guard(event("Bash", command=command), cfg_of(project))
+        assert denied(output)
+        assert "hooks do git" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git commit -m 'nunca use --no-verify'",
+            "git commit -m \"$(cat <<'EOF'\nnão use git commit --no-verify\nEOF\n)\"",
+            "git commit -F - <<EOF\ngit commit -n\nEOF",
+            "git commit -mnovo",
+            "git commit --amend --no-edit",
+            "git push -n origin main",
+            "HUSKY=0 pnpm install",
+            "grep -rn -- --no-verify .husky/",
+        ],
+    )
+    def test_does_not_confuse_with_something_else(self, project, command):
+        assert hooks.guard(event("Bash", command=command), cfg_of(project)) is None
+
+    def test_forced_add_is_a_secrets_rule(self, project):
+        cfg = cfg_of(project)
+        assert denied(hooks.guard(event("Bash", command="git add -f web/dados.json"), cfg))
+        assert denied(hooks.guard(event("Bash", command="git add --force x"), cfg))
+        assert hooks.guard(event("Bash", command="git add -A"), cfg) is None
+
+    def test_off_in_config(self, project):
+        write(project, ".claude/harness-hacka.json", json.dumps({"guard": {"git_hooks": False}}))
+        assert hooks.guard(event("Bash", command="git commit -n -m x"), cfg_of(project)) is None
+
+
 class TestTriggers:
     def test_notices_once_per_session(self, project):
         write(project, ".claude/harness-hacka.json", json.dumps({"profile": "python"}))
@@ -201,10 +247,17 @@ class TestTriggers:
             ("docker-compose.prod.yml", "docker-compose*.yml", True),
             (".github/workflows/ci.yml", ".github/workflows/**", True),
             ("src/pyproject.toml.bak", "pyproject.toml", False),
+            ("web/prisma/schema.prisma", "**/prisma/schema.prisma", True),
+            ("prisma/schema.prisma", "**/prisma/schema.prisma", True),
         ],
     )
     def test_glob(self, rel, glob, expected):
         assert hooks.matches(rel, glob) is expected
+
+    def test_nextjs_profile_sees_the_schema_in_a_monorepo(self, project):
+        write(project, ".claude/harness-hacka.json", json.dumps({"profile": "nextjs"}))
+        out = hooks.triggers(event("Edit", file_path="web/prisma/schema.prisma"), cfg_of(project))
+        assert "estrutura do banco" in out["hookSpecificOutput"]["additionalContext"]
 
 
 class TestRealProcess:

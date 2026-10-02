@@ -48,6 +48,17 @@ STATUS_ALIASES = {
     "substituído": "superseded",
 }
 
+# Chaves e seções de decisão como o harness-memoria e quem escreve em português as grafam.
+# Lidas sem conversão, como os status: trocar o nome da chave ou do título numa decisão
+# `accepted` seria reescrever decisão que não se reescreve.
+FIELD_ALIASES = {
+    "date": ("date", "data"),
+    "decided_by": ("decided_by", "decidido_por", "decidido-por"),
+    "supersedes": ("supersedes", "substitui"),
+    "superseded_by": ("superseded_by", "substituido_por", "substituido-por"),
+}
+RULE_SECTIONS = ("Rule", "Regra")
+
 ENTRY_STATUSES = ("done", "partial", "blocked")
 ENTRY_STATUS_ALIASES = {
     "concluido": "done",
@@ -94,6 +105,22 @@ def normalize_status(value: str) -> str:
 def normalize_entry_status(value: str) -> str:
     raw = value.strip().casefold()
     return ENTRY_STATUS_ALIASES.get(raw, raw)
+
+
+def field_key(fields: dict[str, object], name: str) -> str:
+    """A grafia da chave `name` que este frontmatter usa; a canônica se nenhuma aparece."""
+    for key in FIELD_ALIASES.get(name, (name,)):
+        if key in fields:
+            return key
+    return name
+
+
+def rule_lines(body: str) -> list[str] | None:
+    for name in RULE_SECTIONS:
+        lines = md.section(body, name)
+        if lines is not None:
+            return lines
+    return None
 
 
 def parse_numbers(values: list[str]) -> list[int]:
@@ -266,13 +293,13 @@ def load(cfg: Config) -> Memory:
                     number=int(match.group(1)) if match else 0,
                     status=normalize_status(raw),
                     raw_status=raw,
-                    decision_date=fm.parse_date(fields.get("date")),
-                    decided_by=fm.text(fields, "decided_by"),
-                    supersedes=parse_numbers(fm.as_list(fields, "supersedes")),
-                    superseded_by=parse_numbers(fm.as_list(fields, "superseded_by")),
-                    rule=[
-                        i for i in md.list_items(md.section(body, "Rule")) if not is_placeholder(i)
-                    ],
+                    decision_date=fm.parse_date(fields.get(field_key(fields, "date"))),
+                    decided_by=fm.text(fields, field_key(fields, "decided_by")),
+                    supersedes=parse_numbers(fm.as_list(fields, field_key(fields, "supersedes"))),
+                    superseded_by=parse_numbers(
+                        fm.as_list(fields, field_key(fields, "superseded_by"))
+                    ),
+                    rule=[i for i in md.list_items(rule_lines(body)) if not is_placeholder(i)],
                 )
             )
 

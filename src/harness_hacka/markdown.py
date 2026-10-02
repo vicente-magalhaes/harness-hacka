@@ -10,7 +10,9 @@ import re
 from urllib.parse import unquote
 
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
-_LINK = re.compile(r"(?<!!)\[[^\]\n]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+# Destino com parênteses equilibrados, como o CommonMark aceita: o route group do Next.js
+# (`app/(backend)/`) é caminho real, e cortar no primeiro `)` acusaria link quebrado.
+_LINK = re.compile(r"(?<!!)\[[^\]\n]*\]\(((?:[^()\s]|\([^()\s]*\))+)(?:\s+\"[^\"]*\")?\)")
 _INLINE_CODE = re.compile(r"`[^`\n]*`")
 _ITEM = re.compile(r"^\s{0,1}[-*]\s+(.*)$")
 

@@ -6,8 +6,10 @@ argument-hint: "[all]"
 
 # Housekeeping da memória
 
-`harness-hacka` é o CLI deste plugin. Se o Bash não achar o comando, use
-`python "${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py"` (ou `python3`).
+`harness-hacka` é o CLI deste plugin. Se o shell não achar o comando, use
+`python "${CLAUDE_PLUGIN_ROOT}/bin/harness-hacka.py"` (ou `python3`). Sem essa variável
+(fora do Claude Code), use
+`uvx --from git+https://github.com/vicente-magalhaes/harness-hacka harness-hacka`.
 
 Três papéis, nesta ordem. O CLI acha os candidatos, sem LLM. O subagente `inspector` julga
 cada um e não edita nada. A pessoa decide o que aplicar. Você aplica só o que ela aprovou.
@@ -30,6 +32,11 @@ Chame o subagente `harness-hacka:inspector` com a ferramenta Agent. Passe a list
 candidatos com os motivos, a pasta da memória, os marcadores da config e o que esta conversa
 sabe de relevante sobre eles. Ele devolve um laudo: um item por candidato, com ação, motivo
 e evidência.
+
+Se o agente não tem subagente (o Devin na nuvem não carrega o do plugin), faça você a
+inspeção com as mesmas regras: só leia, uma ação por candidato, evidência obrigatória
+(`arquivo:linha`, commit ou trecho) e, sem evidência, a ação é `ask`. Nada se edita antes
+do passo 3.
 
 ## 3. A pessoa decide
 

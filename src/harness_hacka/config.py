@@ -25,7 +25,9 @@ DEFAULTS: dict[str, Any] = {
     "project": "",
     "profile": "",
     "memory_dir": "memory",
-    "index": {"files": ["CLAUDE.md"]},
+    # Os arquivos de instrução que o agente lê sozinho: AGENTS.md (Devin, Codex, Cursor e o
+    # Claude Code sem CLAUDE.md) e CLAUDE.md. Arquivo que não existe é ignorado.
+    "index": {"files": ["AGENTS.md", "CLAUDE.md"]},
     "housekeeping": {
         # Nota sem `review_by` vence N dias depois da última alteração no git.
         "stale_after_days": 30,
@@ -41,6 +43,8 @@ DEFAULTS: dict[str, Any] = {
         "secrets": True,
         "memory_secrets": True,
         "human_decisions": True,
+        # Nega pular os hooks do git: `--no-verify`, `commit -n`, `HUSKY=0`, `core.hooksPath`.
+        "git_hooks": True,
     },
     # glob do caminho -> por que esse arquivo costuma carregar decisão.
     "triggers": {},
@@ -70,6 +74,7 @@ class Config:
     guard_secrets: bool
     guard_memory_secrets: bool
     human_decisions: bool
+    guard_git_hooks: bool
     triggers: dict[str, str]
     verify: tuple[str, ...]
 
@@ -220,6 +225,7 @@ def _build(root: Path, d: dict[str, Any]) -> Config:
         guard_secrets=d["guard"]["secrets"],
         guard_memory_secrets=d["guard"]["memory_secrets"],
         human_decisions=d["guard"]["human_decisions"],
+        guard_git_hooks=d["guard"]["git_hooks"],
         triggers={g: r for g, r in d["triggers"].items() if r},
         verify=tuple(d["verify"]),
     )

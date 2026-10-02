@@ -4,8 +4,9 @@ Tem orçamento (`briefing.max_chars`, 6.000 por padrão). Acima de ~10.000 chars
 troca o bloco inteiro por uma prévia truncada (medido no harness-memoria), então o corte é
 feito aqui, em ordem, e sempre avisado. Cortar calado apaga o único sinal de que falta algo.
 
-Ordem de corte, do mais barato ao mais caro: índice de notas (já está no CLAUDE.md ou em
-memory/README.md), lições mais antigas, texto das regras, próximos passos, lições, decisões.
+Ordem de corte, do mais barato ao mais caro: índice de notas (já está no AGENTS.md, no
+CLAUDE.md ou em memory/README.md), lições mais antigas, texto das regras, próximos passos,
+lições, decisões.
 Cabeçalho e pendências nunca saem.
 """
 
@@ -145,12 +146,16 @@ def _lessons(memory: Memory) -> list[str]:
     return items  # do mais novo para o mais velho
 
 
+# Arquivos de instrução que o agente carrega sozinho no início da sessão.
+_INSTRUCTION_FILES = ("AGENTS.md", "CLAUDE.md")
+
+
 def _notes_block(memory: Memory) -> _Block:
     for path in index.index_files(memory):
-        if path.name == "CLAUDE.md" and index.has_region(
+        if path.name in _INSTRUCTION_FILES and index.has_region(
             path.read_text(encoding="utf-8-sig"), "index"
         ):
-            return _Block("Notas")  # o CLAUDE.md já carrega o índice; não repetir
+            return _Block("Notas")  # o arquivo de instrução já carrega o índice; não repetir
     lines = [f"- `{n.rel}`: ler quando {n.read_when or '(sem read_when)'}" for n in memory.notes]
     return _Block("Notas", lines, None, pointer=f"`{memory.cfg.memory_dir}/`")
 

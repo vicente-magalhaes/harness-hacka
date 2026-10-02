@@ -79,3 +79,9 @@ def test_empty_memory_does_not_break(project):
     assert briefing.build(memory_of(project), TODAY).startswith(
         "## Memória do projeto (harness-hacka)"
     )
+
+
+def test_agents_md_with_the_index_also_spares_the_notes_block(project):
+    write(project, "memory/banco.md", NOTE)
+    write(project, "AGENTS.md", "<!-- harness-hacka:index -->\n<!-- /harness-hacka:index -->\n")
+    assert "### Notas" not in briefing.build(memory_of(project), TODAY)
